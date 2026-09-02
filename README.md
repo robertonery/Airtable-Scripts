@@ -43,6 +43,16 @@ the individual `P+ Geo Region` choices.
 field. `number` mappings (`Projected PCV`) parse the source value as a
 number and skip the field (logging why) if it isn't a valid number.
 
+### Exception: Brazil Projected PCV
+
+When a record's **Match (first team listed is home)** contains `(BRA)` and
+its **P+ Geo Region** includes `BR` (either the value already on the
+record, or the value about to be filled in from `geoCountries` this run),
+**Projected PCV** is set to a flat **40,000** instead of League Manager's
+`Projected PCV per event` value. This only fires when Projected PCV is
+still blank on the record — like every other field, an existing value is
+never overwritten.
+
 ## Debugging / reading the run log
 
 Every run prints a full diagnostic trace to the automation's run history

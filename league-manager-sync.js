@@ -13,6 +13,10 @@
  * the corresponding League Manager field. Fields that already have a
  * value are never touched.
  *
+ * Exception: for Brazil events (Match contains "(BRA)" and the P+ Geo
+ * Region includes "BR"), Projected PCV is forced to a flat
+ * BRA_PROJECTED_PCV_VALUE instead of League Manager's per-event figure.
+ *
  * Trigger setup (done in the Airtable Automations UI, not in this file):
  *   1. Trigger: "At a scheduled time".
  *   2. Repeat every 15 minutes (Every 15 minutes / custom interval,
@@ -30,11 +34,15 @@ const JOIN_FIELD_SOURCE = "League Name";
 const JOIN_FIELD_LOOKUP = "leagueFullName";
 const MATCH_FIELD_NAME = "Match (first team listed is home)";
 
+const GEO_REGION_TARGET_FIELD = "P+ Geo Region";
+const GEO_REGION_LOOKUP_FIELD = "geoCountries";
+const PROJECTED_PCV_TARGET_FIELD = "Projected PCV";
+
 // target field (in All Live Events) <- lookup field (in League Manager)
 // type is one of: "singleSelect", "multipleSelects", "number", "text"
 const FIELD_MAPPINGS = [
     { target: "League Abbr", lookup: "league", type: "singleSelect" },
-    { target: "P+ Geo Region", lookup: "geoCountries", type: "multipleSelects" },
+    { target: GEO_REGION_TARGET_FIELD, lookup: GEO_REGION_LOOKUP_FIELD, type: "multipleSelects" },
     { target: "Organization", lookup: "Org Name", type: "singleSelect" },
     { target: "Tier", lookup: "Tier", type: "singleSelect" },
     { target: "AWS Region", lookup: "AWS Region", type: "singleSelect" },
@@ -45,8 +53,14 @@ const FIELD_MAPPINGS = [
     { target: "Distribution Partners", lookup: "Distribution Partners", type: "multipleSelects" },
     { target: "Propeller org", lookup: "orgId", type: "text" },
     { target: "Vtags", lookup: "vTags", type: "text" },
-    { target: "Projected PCV", lookup: "Projected PCV per event", type: "number" },
+    { target: PROJECTED_PCV_TARGET_FIELD, lookup: "Projected PCV per event", type: "number" },
 ];
+
+// Business-rule override: Brazil events use a flat PCV instead of
+// League Manager's per-event figure.
+const BRA_MATCH_SUBSTRING = "(BRA)";
+const BRA_GEO_REGION_CODE = "BR";
+const BRA_PROJECTED_PCV_VALUE = 40000;
 
 function isBlankValue(value) {
     if (value === null || value === undefined) return true;
@@ -70,6 +84,17 @@ function findChoiceCaseInsensitive(choiceNames, text) {
         if (choice.trim().toLowerCase() === lower) return choice;
     }
     return null;
+}
+
+function getRawSelectNames(rawValue) {
+    return Array.isArray(rawValue)
+        ? rawValue.map((v) => v.name)
+        : String(rawValue).split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function isBrazilPcvException(matchName, geoRegionNames) {
+    if (!matchName.includes(BRA_MATCH_SUBSTRING)) return false;
+    return geoRegionNames.some((name) => name.trim().toUpperCase() === BRA_GEO_REGION_CODE);
 }
 
 const liveEventsTable = base.getTable(SOURCE_TABLE_NAME);
@@ -140,8 +165,20 @@ for (const record of sourceQuery.records) {
     const lookupRecord = matches[0];
     const fieldsToUpdate = {};
 
+    const currentGeoRegion = record.getCellValue(GEO_REGION_TARGET_FIELD);
+    const geoRegionNames = isBlankValue(currentGeoRegion)
+        ? getRawSelectNames(lookupRecord.getCellValue(GEO_REGION_LOOKUP_FIELD))
+        : getRawSelectNames(currentGeoRegion);
+    const braPcvException = isBrazilPcvException(matchName, geoRegionNames);
+
     for (const mapping of FIELD_MAPPINGS) {
         if (!isBlankValue(record.getCellValue(mapping.target))) continue;
+
+        if (mapping.target === PROJECTED_PCV_TARGET_FIELD && braPcvException) {
+            fieldsToUpdate[mapping.target] = BRA_PROJECTED_PCV_VALUE;
+            console.log(`  -> Brazil PCV exception: Match contains "${BRA_MATCH_SUBSTRING}" and Geo Region includes "${BRA_GEO_REGION_CODE}", forcing "${PROJECTED_PCV_TARGET_FIELD}" = ${BRA_PROJECTED_PCV_VALUE}`);
+            continue;
+        }
 
         const rawValue = lookupRecord.getCellValue(mapping.lookup);
         if (isBlankValue(rawValue)) continue;
@@ -157,9 +194,7 @@ for (const record of sourceQuery.records) {
                 console.log(`Record ${record.id}: no "${mapping.target}" choice matching "${text}", skipping field`);
             }
         } else if (mapping.type === "multipleSelects") {
-            const rawNames = Array.isArray(rawValue)
-                ? rawValue.map((v) => v.name)
-                : String(rawValue).split(",").map((s) => s.trim()).filter(Boolean);
+            const rawNames = getRawSelectNames(rawValue);
             const choiceNames = targetFieldChoiceNames.get(mapping.target);
             const matchedNames = [];
             for (const name of rawNames) {
