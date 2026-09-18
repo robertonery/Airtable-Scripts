@@ -1,41 +1,52 @@
 // Airtable Automation "Run a script" action.
+// Table: All Live Events (tbl4iC5D09JfS0t8r)
+// View: https://airtable.com/appSyUSDFEiCe4Uuc/tbl4iC5D09JfS0t8r/viw66aYpB9SRsv40l
 //
-// Only continues the automation if `mtq` has one of these MV tile sets fully present:
-//   - all 4: MV1T, MV2T, MV3T, MV4T
-//   - all 3: MV1T, MV2T, MV3T
-//   - all 2: MV1T, MV2T
-// When it continues, also outputs `mtqList`: the mtq values for the matched tile set.
+// Reads the 'Multiview - Tile - Quadrant' field (multipleSelects) on the triggering
+// record and only continues if one of these MV1 tile sets is fully selected:
+//   - all 4: MV1 - 4T - Tile 1 (Top Left) / Tile 2 (Top Right) / Tile 3 (Bottom Left) / Tile 4 (Bottom Right)
+//   - all 3: MV1 - 3T - Tile 1 (Top Left) / Tile 2 (Top Right) / Tile 3 (Bottom)
+//   - all 2: MV1 - 2T - Tile 1 (Left) / Tile 2 (Right)
+// When it continues, also outputs `mtqList`: the selected option names for the matched set.
 //
-// Rename MV_FIELDS / the `mtq` lookup below to match your actual field/variable names
-// before pasting this into the base.
+// Automation input config must expose the triggering record id as `recordId`.
 
-const MV_FIELDS = ["MV1T", "MV2T", "MV3T", "MV4T"];
+const TABLE_ID = "tbl4iC5D09JfS0t8r";
+const VIEW_ID = "viw66aYpB9SRsv40l";
+const FIELD_NAME = "Multiview - Tile - Quadrant";
+
+const FOUR_TILE = [
+    "MV1 - 4T - Tile 1 (Top Left)",
+    "MV1 - 4T - Tile 2 (Top Right)",
+    "MV1 - 4T - Tile 3 (Bottom Left)",
+    "MV1 - 4T - Tile 4 (Bottom Right)",
+];
+const THREE_TILE = [
+    "MV1 - 3T - Tile 1 (Top Left)",
+    "MV1 - 3T - Tile 2 (Top Right)",
+    "MV1 - 3T - Tile 3 (Bottom)",
+];
+const TWO_TILE = ["MV1 - 2T - Tile 1 (Left)", "MV1 - 2T - Tile 2 (Right)"];
 
 const config = input.config();
-const mtq = config.mtq; // record fields object, e.g. { MV1T: "...", MV2T: "...", ... }
+const table = base.getTable(TABLE_ID);
+const view = table.getView(VIEW_ID);
+const record = await view.selectRecordAsync(config.recordId, { fields: [FIELD_NAME] });
 
-function isPresent(value) {
-    return value !== null && value !== undefined && value !== "";
+const selected = (record.getCellValue(FIELD_NAME) || []).map((choice) => choice.name);
+
+function allSelected(optionNames) {
+    return optionNames.every((name) => selected.includes(name));
 }
 
-function allPresent(fieldNames) {
-    return fieldNames.every((fieldName) => isPresent(mtq[fieldName]));
-}
-
-const hasFourTiles = allPresent(MV_FIELDS.slice(0, 4));
-const hasThreeTiles = allPresent(MV_FIELDS.slice(0, 3));
-const hasTwoTiles = allPresent(MV_FIELDS.slice(0, 2));
+const hasFourTiles = allSelected(FOUR_TILE);
+const hasThreeTiles = allSelected(THREE_TILE);
+const hasTwoTiles = allSelected(TWO_TILE);
 
 if (!(hasFourTiles || hasThreeTiles || hasTwoTiles)) {
     output.set("shouldContinue", false);
-    return;
+} else {
+    const matched = hasFourTiles ? FOUR_TILE : hasThreeTiles ? THREE_TILE : TWO_TILE;
+    output.set("shouldContinue", true);
+    output.set("mtqList", matched);
 }
-
-const matchedFields = hasFourTiles
-    ? MV_FIELDS.slice(0, 4)
-    : hasThreeTiles
-    ? MV_FIELDS.slice(0, 3)
-    : MV_FIELDS.slice(0, 2);
-
-output.set("shouldContinue", true);
-output.set("mtqList", matchedFields.map((fieldName) => mtq[fieldName]));
