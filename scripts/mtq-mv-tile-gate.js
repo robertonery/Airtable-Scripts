@@ -4,6 +4,7 @@
 //   - all 4: MV1T, MV2T, MV3T, MV4T
 //   - all 3: MV1T, MV2T, MV3T
 //   - all 2: MV1T, MV2T
+// When it continues, also outputs `mtqList`: the mtq values for the matched tile set.
 //
 // Rename MV_FIELDS / the `mtq` lookup below to match your actual field/variable names
 // before pasting this into the base.
@@ -30,4 +31,11 @@ if (!(hasFourTiles || hasThreeTiles || hasTwoTiles)) {
     return;
 }
 
+const matchedFields = hasFourTiles
+    ? MV_FIELDS.slice(0, 4)
+    : hasThreeTiles
+    ? MV_FIELDS.slice(0, 3)
+    : MV_FIELDS.slice(0, 2);
+
 output.set("shouldContinue", true);
+output.set("mtqList", matchedFields.map((fieldName) => mtq[fieldName]));
