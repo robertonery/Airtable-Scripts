@@ -1,19 +1,17 @@
 // Airtable Automation "Run a script" action.
-// Table: All Live Events (tbl4iC5D09JfS0t8r)
-// View: https://airtable.com/appSyUSDFEiCe4Uuc/tbl4iC5D09JfS0t8r/viw66aYpB9SRsv40l
+// Automation: Multiview Assigned Automation (wfll9oPj468jqrdL3)
+// Trigger: record updated on 'All Live Events' (tbl4iC5D09JfS0t8r), watching
+//          'Multiview - Tile - Quadrant' (fld9sKtCaVA4WQ3Lk).
 //
-// Reads the 'Multiview - Tile - Quadrant' field (multipleSelects) on the triggering
-// record and only continues if one of these MV1 tile sets is fully selected:
+// In this script step's Input Variables, add a variable named `mtq` mapped to
+// the trigger record's 'Multiview - Tile - Quadrant' field (Automation passes
+// multipleSelects fields in as an array of the selected option names).
+//
+// Only continues if one of these MV1 tile sets is fully selected:
 //   - all 4: MV1 - 4T - Tile 1 (Top Left) / Tile 2 (Top Right) / Tile 3 (Bottom Left) / Tile 4 (Bottom Right)
 //   - all 3: MV1 - 3T - Tile 1 (Top Left) / Tile 2 (Top Right) / Tile 3 (Bottom)
 //   - all 2: MV1 - 2T - Tile 1 (Left) / Tile 2 (Right)
 // When it continues, also outputs `mtqList`: the selected option names for the matched set.
-//
-// Automation input config must expose the triggering record id as `recordId`.
-
-const TABLE_ID = "tbl4iC5D09JfS0t8r";
-const VIEW_ID = "viw66aYpB9SRsv40l";
-const FIELD_NAME = "Multiview - Tile - Quadrant";
 
 const FOUR_TILE = [
     "MV1 - 4T - Tile 1 (Top Left)",
@@ -29,11 +27,7 @@ const THREE_TILE = [
 const TWO_TILE = ["MV1 - 2T - Tile 1 (Left)", "MV1 - 2T - Tile 2 (Right)"];
 
 const config = input.config();
-const table = base.getTable(TABLE_ID);
-const view = table.getView(VIEW_ID);
-const record = await view.selectRecordAsync(config.recordId, { fields: [FIELD_NAME] });
-
-const selected = (record.getCellValue(FIELD_NAME) || []).map((choice) => choice.name);
+const selected = config.mtq || [];
 
 function allSelected(optionNames) {
     return optionNames.every((name) => selected.includes(name));
